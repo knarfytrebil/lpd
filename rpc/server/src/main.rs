@@ -6,12 +6,16 @@ extern crate ctrlc;
 extern crate bitcoin;
 extern crate secp256k1;
 extern crate hex;
+extern crate serde_json;
+
 
 extern crate futures;
 
 extern crate implementation;
 
 extern crate connection;
+
+extern crate wire;
 
 mod config;
 use self::config::{Argument, Error as CommandLineReadError};
@@ -22,6 +26,11 @@ use grpc::Error as GrpcError;
 use httpbis::Error as HttpbisError;
 use std::io::Error as IoError;
 use implementation::wallet_lib::error::WalletError;
+
+use wire::MessageInfoJSON;
+use futures::sync::mpsc::unbounded;
+
+use std::io::Write;
 
 #[derive(Debug)]
 enum Error {
@@ -44,6 +53,9 @@ fn main() -> Result<(), Error> {
 
     let argument = Argument::from_env().map_err(CommandLineRead)?;
 
+    let mut message_dump_file = std::fs::File::create("msg-dump.json")
+        .map_err(|err| Io(err))?;
+
     let wallet = {
         let mut wallet_db_path = PathBuf::from(argument.db_path.clone());
         wallet_db_path.push("wallet");
@@ -51,12 +63,12 @@ fn main() -> Result<(), Error> {
         Arc::new(Mutex::new(wallet))
     };
 
+
     let (node, tx, rx) = {
         println!("the lightning peach node is listening rpc at: {}, listening peers at: {}, has database at: {}",
                  argument.address, argument.p2p_address, argument.db_path);
 
         let (tx, rx) = mpsc::channel(1);
-
         let tx_wait = tx.clone();
         ctrlc::set_handler(move || {
             println!("received termination command");
@@ -75,7 +87,41 @@ fn main() -> Result<(), Error> {
         let mut node_db_path = PathBuf::from(argument.db_path.clone());
         node_db_path.push("node");
 
-        (Arc::new(RwLock::new(Node::new(wallet.clone(), secret, node_db_path))), tx, rx)
+        let (ch_message_dump_sender, ch_message_dump_receiver) = std::sync::mpsc::channel::<MessageInfoJSON>();
+
+        // TODO(mkl): maybe future will suffice ?
+        std::thread::spawn(move || {
+            loop {
+                // TODO(mkl): stop on node stop. If all peers and node are dropped then channel will close
+                // Maybe we should done it earlier.
+                match ch_message_dump_receiver.recv() {
+                    Ok(msgInfo) => {
+                        let s = match serde_json::to_string(&msgInfo) {
+                            Ok(s) => s,
+                            Err(err) => {
+                                eprintln!("cannot serialize value to json: {:?}", err);
+                                continue
+                            }
+                        };
+                        match message_dump_file.write_all(&format!("{}\n", s).into_bytes()) {
+                            Ok(_) => {},
+                            Err(err) => {
+                                eprintln!("cannot write to message dump file: {:?}", err);
+                                return;
+                            }
+                        };
+                    }
+                    Err(err) => return,
+                }
+            }
+        });
+
+        (Arc::new(RwLock::new(Node::new(
+            wallet.clone(),
+            secret,
+            node_db_path,
+            ch_message_dump_sender,
+        ))), tx, rx)
     };
 
     let server = {

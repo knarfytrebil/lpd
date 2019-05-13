@@ -19,6 +19,9 @@ pub use self::announce_signatures::*;
 mod gossip_timestamp_range;
 pub use self::gossip_timestamp_range::*;
 
+mod tools;
+pub use self::tools::*;
+
 use serde::Serialize;
 use serde::Serializer;
 use serde::Deserialize;
@@ -102,6 +105,18 @@ macro_rules! message {
                     }
                 }
             )*
+
+            pub fn get_type(&self) -> String {
+                use self::$name::*;
+                match self {
+                    $(
+                        &$variant(_) => {
+                            stringify!($variant).to_string()
+                        },
+                    )*
+                }
+
+            }
         }
 
         impl fmt::Debug for $name {

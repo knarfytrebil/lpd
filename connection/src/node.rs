@@ -7,9 +7,10 @@ use tokio::prelude::{Future, AsyncRead, AsyncWrite, Sink};
 use tokio::executor::Spawn;
 use futures::sync::mpsc::Receiver;
 use secp256k1::Signature;
-use wire::{Message, MessageExt};
+use wire::{Message, MessageExt, MessageInfoJSON, MessageDirection};
 use processor::{MessageConsumer, ConsumingFuture};
 use binformat::WireError;
+use std::sync::mpsc;
 
 use crate::address::TransportError;
 use super::address::{AbstractAddress, ConnectionStream, Command, Connection};
@@ -24,23 +25,43 @@ use channel_machine::ChannelState;
 use std::path::Path;
 use either::Either;
 
+use tools::edbg;
+
 #[cfg(feature = "rpc")]
 use interface::routing::{LightningNode, ChannelEdge, Info};
 
 pub struct Node {
+    // TODO(mkl): change to store all peers info, not only public key. Maybe something like HashMap<Pubkey, Remote>
     peers: Vec<PublicKey>,
+
+    // TODO(mkl): add more explanation
     shared_state: SharedState,
     db: Arc<RwLock<DB>>,
     secret: SecretKey,
     blockchain: Blockchain,
     wallet: Arc<Mutex<Box<dyn Wallet + Send>>>,
+
+    // Channel for sending messages for dumping
+    ch_message_dump: Mutex<mpsc::Sender<MessageInfoJSON>>,
 }
 
+// Remote represents remote peer
+// TODO(mkl): Maybe rename to RemotePeer
 pub struct Remote {
+    // TODO(mkl): maybe rename to storage
     db: Arc<RwLock<DB>>,
+
+    // TODO(mkl): maybe rename to onchain_wallet
     wallet: Arc<Mutex<Box<dyn Wallet + Send>>>,
+
+    // TODO(mkl): maybe rename to identity public key
     public: PublicKey,
+
+    // TODO(mkl): allow peer to have multiple channels. So it should be like HashMap<ChannelID, ChannelState>
     channel: ChannelState,
+
+    // mpsc channel for message dumping
+    ch_message_dump: mpsc::Sender<MessageInfoJSON>,
 }
 
 impl MessageConsumer for Remote {
@@ -60,6 +81,15 @@ impl MessageConsumer for Remote {
 
         match message {
             Either::Left(message) => {
+                // TODO(mkl): response is generated here. Extend to generate multiple messages
+                MessageInfoJSON::new(&message, MessageDirection::Received, hex::encode(&self.public.serialize()[..]))
+                    .map(|msgInfo| {
+                        self.ch_message_dump.send(msgInfo)
+                            .map_err(|err| eprintln!("internal error. cannot send message info into channel for dumping: {:?}", err))
+                    })
+                    .map_err(|err| {
+                        eprintln!("cannot generate messageInfo from message: {:?}", err);
+                    });
                 match self.channel.next(message) {
                     (state, Some(response)) => {
                         println!("response message: {:?}", response);
@@ -85,7 +115,7 @@ impl MessageConsumer for Remote {
 }
 
 impl Node {
-    pub fn new<P: AsRef<Path>>(wallet: Arc<Mutex<Box<dyn Wallet + Send>>>, secret: [u8; 32], path: P) -> Self {
+    pub fn new<P: AsRef<Path>>(wallet: Arc<Mutex<Box<dyn Wallet + Send>>>, secret: [u8; 32], path: P, ch_message_dump: mpsc::Sender<MessageInfoJSON>) -> Self {
         use state::DBBuilder;
 
         let db = DBBuilder::default().user::<State>().build(path).unwrap();
@@ -98,6 +128,7 @@ impl Node {
             secret: SecretKey::from_slice(&secret[..]).unwrap(),
             blockchain: Blockchain::bitcoin(wallet.clone()),
             wallet: wallet,
+            ch_message_dump: Mutex::new(ch_message_dump),
         }
     }
 
@@ -111,10 +142,12 @@ impl Node {
                 wallet: self.wallet.clone(),
                 public: remote_public,
                 channel: ChannelState::new(),
+                ch_message_dump: self.ch_message_dump.lock().unwrap().clone(),
             })
         }
     }
 
+    // process_connection handles incoming connections
     fn process_connection<S>(&self, peer: Remote, connection: Connection<S>) -> Spawn
     where
         S: AsyncRead + AsyncWrite + Send + 'static,
@@ -128,11 +161,14 @@ impl Node {
         let peer_pubkey = peer.public.clone();
 
         let p_graph = self.shared_state.clone();
-        let processor = (p_graph, (PingContext::default(), (peer, ())));
-        // TODO(mkl)
+        let processor = (
+            p_graph,
+            (PingContext::default(), (peer, ()))
+        );
+        // TODO(mkl): all incoming messages are read and processed here. We need not stop after error in processing message
         let connection = stream
             .fold((processor, sink), |(processor, sink), message| {
-                processor.process(sink, message)
+                processor.process(sink, edbg!(message))
             })
             .map_err(move |err| {
                 // TODO(mkl): correctly delete peer from list of connected peers

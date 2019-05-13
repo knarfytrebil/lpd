@@ -1,3 +1,5 @@
+// TODO(mkl): maybe change to storage
+// TODO(mkl): foreseen migration
 use std::path::Path;
 use rocksdb::{DB as RocksDB, ColumnFamilyDescriptor};
 use serde::{Serialize, de::DeserializeOwned};
