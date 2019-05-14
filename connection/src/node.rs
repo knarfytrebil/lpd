@@ -25,8 +25,6 @@ use channel_machine::ChannelState;
 use std::path::Path;
 use either::Either;
 
-use tools::edbg;
-
 #[cfg(feature = "rpc")]
 use interface::routing::{LightningNode, ChannelEdge, Info};
 
@@ -83,8 +81,8 @@ impl MessageConsumer for Remote {
             Either::Left(message) => {
                 // TODO(mkl): response is generated here. Extend to generate multiple messages
                 MessageInfoJSON::new(&message, MessageDirection::Received, hex::encode(&self.public.serialize()[..]))
-                    .map(|msgInfo| {
-                        self.ch_message_dump.send(msgInfo)
+                    .map(|msg_info| {
+                        self.ch_message_dump.send(msg_info)
                             .map_err(|err| eprintln!("internal error. cannot send message info into channel for dumping: {:?}", err))
                     })
                     .map_err(|err| {
@@ -168,7 +166,7 @@ impl Node {
         // TODO(mkl): all incoming messages are read and processed here. We need not stop after error in processing message
         let connection = stream
             .fold((processor, sink), |(processor, sink), message| {
-                processor.process(sink, edbg!(message))
+                processor.process(sink, dbg!(message))
             })
             .map_err(move |err| {
                 // TODO(mkl): correctly delete peer from list of connected peers

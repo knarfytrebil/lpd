@@ -95,8 +95,8 @@ fn main() -> Result<(), Error> {
                 // TODO(mkl): stop on node stop. If all peers and node are dropped then channel will close
                 // Maybe we should done it earlier.
                 match ch_message_dump_receiver.recv() {
-                    Ok(msgInfo) => {
-                        let s = match serde_json::to_string(&msgInfo) {
+                    Ok(msg_info) => {
+                        let s = match serde_json::to_string(&msg_info) {
                             Ok(s) => s,
                             Err(err) => {
                                 eprintln!("cannot serialize value to json: {:?}", err);

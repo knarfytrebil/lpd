@@ -4,7 +4,7 @@ members = [
     "routing", "bitcoin-types", "common-types",
     "testenv", "rpc/interface", "rpc/implementation", "rpc/server", "rpc/client", "connection", "state", "binformat",
     "processor", "onion", "channel_machine", "wire-compatibility",
-    "cmd/dump-reader", "tools/tools",
+    "cmd/dump-reader"
 ]
 exclude = ["electrs"]
 
@@ -40,7 +40,6 @@ chainntfs = { path = "chainntfs" }
 channel = { path = "channel" }
 wallet = { path = "wallet" }
 routing = { path = "routing" }
-tools = { path = "tools/tools" }
 
 rand = "0.5.4"
 secp256k1 = "0.12"

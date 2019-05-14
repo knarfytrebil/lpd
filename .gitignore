@@ -2,3 +2,4 @@
 **/*.rs.bk
 .idea
 electrs/
+msg-dump.json

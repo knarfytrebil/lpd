@@ -1,5 +1,4 @@
 #![forbid(unsafe_code)]
-#![feature(core_intrinsics)]
 
 mod node;
 mod address;

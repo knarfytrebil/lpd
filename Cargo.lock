@@ -447,7 +447,6 @@ dependencies = [
  "serde_derive 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
  "state 0.1.0",
  "tokio 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "tools 0.1.0",
  "wallet 0.1.0 (git+https://github.com/LightningPeach/rust-wallet.git)",
  "wire 0.1.0",
 ]
@@ -1270,7 +1269,6 @@ dependencies = [
  "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "shachain 0.1.0",
  "tokio 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
- "tools 0.1.0",
  "wallet 0.1.0",
  "wire 0.1.0",
 ]
@@ -2742,10 +2740,6 @@ dependencies = [
 name = "toml"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "tools"
-version = "0.1.0"
 
 [[package]]
 name = "try-lock"
